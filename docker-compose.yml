@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: .
+    container_name: moderation_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./violations.json:/app/violations.json
