@@ -68,7 +68,7 @@ async def injection_guardrail(ctx, agent, input) -> GuardrailFunctionOutput:
             tripwire_triggered=result.final_output.is_injection
         )
     except Exception as e:
-        logger.error(f"guardrail_agent error: {e}")
+        logger.error("guardrail_agent error: %s", e)
         return GuardrailFunctionOutput(output_info="error", tripwire_triggered=False)
 
 _classifier = Agent(
