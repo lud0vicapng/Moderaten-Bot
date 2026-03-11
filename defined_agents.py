@@ -123,7 +123,7 @@ async def classifier_agent(message_content: str) -> ClassificationResult | None:
         logger.error("classifier_agent error: %s", e)
         return None
 
-async def verifier_agent(original_message: str, previous_category: str, previous_reasoning: str) -> ClassificationResult | None:
+async def verifier_agent(original_message: str, previous_category: str, previous_reasoning: str) -> VerifierResult | None:
     """Verifies the classification when classifier agent's confidence is low."""
     logger.info("Low confidence detected (category=%s) — invoking verifier agent", previous_category)
     user_prompt = (
