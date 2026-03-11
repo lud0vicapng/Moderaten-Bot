@@ -79,7 +79,7 @@ _classifier = Agent(
         "Assign a confidence_score between 0.0 and 1.0.\n"
         "Use scores above 0.85 ONLY for unambiguously toxic messages.\n"
         "For borderline or context-dependent messages, assign a score below 0.6.\n"
-        "When in doubt, prefer a lower confidence score." 
+        "When in doubt, prefer a lower confidence score.\n"
         "Always return valid JSON matching the schema."
     ),
     model=_model,
@@ -120,7 +120,7 @@ async def classifier_agent(message_content: str) -> ClassificationResult | None:
     except InputGuardrailTripwireTriggered:
         raise
     except Exception as e:
-        logger.error(f"classifier_agent error: {e}")
+        logger.error("classifier_agent error: %s", e)
         return None
 
 async def verifier_agent(original_message: str, previous_category: str, previous_reasoning: str) -> ClassificationResult | None:
@@ -138,7 +138,7 @@ async def verifier_agent(original_message: str, previous_category: str, previous
         result = await Runner.run(_verifier, user_prompt)
         return result.final_output
     except Exception as e:
-        logger.error(f"verifier_agent error: {e}")
+        logger.error("verifier_agent error: %s", e)
         return None
 
 async def moderator_agent(username: str, message_content: str, category: str, reasoning: str) -> ModerationMessage | None:
@@ -153,6 +153,6 @@ async def moderator_agent(username: str, message_content: str, category: str, re
         result = await Runner.run(_moderator, user_prompt)
         return result.final_output
     except Exception as e:
-        logger.error(f"moderator_agent error: {e}")
+        logger.error("moderator_agent error: %s", e)
         return None
     

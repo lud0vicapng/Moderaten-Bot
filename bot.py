@@ -1,20 +1,17 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-
 import re
 import logging
 import time
 import datetime
 from collections import deque
-
+import asyncio
 from agents import InputGuardrailTripwireTriggered
-
 from config import (
     DISCORD_TOKEN, ADMIN_CHANNEL_ID, RATE_LIMIT_MESSAGES, MAX_CONTENT_LENGTH, RATE_LIMIT_WINDOW,
     CONFIDENCE_LOW_THRESHOLD, THREAT_TIMEOUT_DURATION, HARASSMENT_TIMEOUT_DURATION, EXPLANATION_COOLDOWN, BANNED_KEYWORDS
 )
-
 from database import log_violation, purge_old_violations, get_violations
 from defined_agents import classifier_agent, verifier_agent, moderator_agent, inference_worker, enqueue
 
@@ -31,7 +28,7 @@ user_warn_counts: dict[int, int] = {}
 @tasks.loop(hours=24)
 async def daily_purge() -> None:
     """Purges old violations from the database and cleans up in-memory state."""
-    purge_old_violations()
+    await asyncio.to_thread(purge_old_violations)
     user_warn_counts.clear()
 
     now = time.time()
@@ -51,6 +48,8 @@ class Moderaten(commands.Bot):
         self.loop.create_task(inference_worker())
         daily_purge.start()
         init_keyword_patterns()
+        synced = await self.tree.sync()
+        logger.info("Synced %d command(s): %s", len(synced), [c.name for c in synced])
 
 bot = Moderaten(command_prefix="!", intents=intents)
 
@@ -114,7 +113,6 @@ async def log_to_discord_channel(
 
     color_map = {
         "timeout": discord.Color.orange(),
-        "mute": discord.Color.red(),
         "warn": discord.Color.yellow(),
         "dropped": discord.Color.purple(),
         "rate_limited": discord.Color.blurple(),
@@ -123,7 +121,6 @@ async def log_to_discord_channel(
 
     action_emoji_map = {
         "timeout": "⏱️",
-        "mute": "🔇",
         "warn": "⚠️",
         "dropped": "🛡️",
         "rate_limited": "🚦",
@@ -136,10 +133,10 @@ async def log_to_discord_channel(
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
     embed.set_author(name=str(user), icon_url=user.display_avatar.url)
-    embed.add_field(name="User", value=f"{user.mention} (`{user.id}`)", inline=True)
-    embed.add_field(name="Category", value=f"`{category}`", inline=True)
-    embed.add_field(name="Confidence", value=f"`{confidence_score:.2f}`", inline=True)
-    embed.add_field(name="Message", value=f"```{content[:300]}```", inline=False)
+    embed.add_field(name="User", value=f"{user.mention} ({user.id})", inline=True)
+    embed.add_field(name="Category", value=f"{category}", inline=True)
+    embed.add_field(name="Confidence", value=f"{confidence_score:.2f}", inline=True)
+    embed.add_field(name="Message", value=f"{content[:300]}", inline=False)
     embed.set_footer(text=f"Server: {user.guild.name}")
 
     try:
@@ -150,9 +147,7 @@ async def log_to_discord_channel(
 @bot.event
 async def on_ready() -> None:
     if bot.user:
-        synced = await bot.tree.sync()
-        logger.info("Synced %d command(s): %s", len(synced), [c.name for c in synced])
-        logger.info(f"Logged in as %s (%s)", bot.user.name, bot.user.id)
+        logger.info("Logged in as %s (%s)", bot.user.name, bot.user.id)
 
 @bot.event
 async def on_message(message: discord.Message) -> None:
@@ -176,7 +171,7 @@ async def on_message(message: discord.Message) -> None:
             await message.author.timeout(timeout_until, reason="Rate limit exceeded")
         except discord.errors.Forbidden:
             logger.warning("Lacking permissions to timeout user %s for rate limiting", username)
-        log_violation(user_id, username, guild_id, channel_id, content, "rate_limit", 0.0, "rate_limited")
+        await asyncio.to_thread(log_violation, user_id, username, guild_id, channel_id, content, "rate_limit", 0.0, "rate_limited")
         await log_to_discord_channel("rate_limited", message.author, "rate_limit", 0.0, content)
         return
 
@@ -189,7 +184,11 @@ async def on_message(message: discord.Message) -> None:
             return
     except InputGuardrailTripwireTriggered as e:
         logger.info("Guardrail triggered for user %s: %s", username, e)
-        log_violation(user_id, username, guild_id, channel_id, content, "injection", 1.0, "dropped")
+        try:
+            await message.delete()
+        except (discord.errors.Forbidden, discord.errors.NotFound):
+            pass
+        await asyncio.to_thread(log_violation, user_id, username, guild_id, channel_id, content, "injection", 1.0, "dropped")
         await log_to_discord_channel("dropped", message.author, "injection", 1.0, content)
         return
 
@@ -222,7 +221,7 @@ async def on_message(message: discord.Message) -> None:
                 timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=THREAT_TIMEOUT_DURATION)
                 await message.author.timeout(timeout_until, reason="Threat detected")
             except discord.errors.Forbidden:
-                            logger.warning("Lacking permissions to timeout user %s for rate limiting", username)
+                logger.warning("Lacking permissions to timeout user %s for sending threats", username)
 
         case "harassment":
             action_taken = "timeout"
@@ -230,7 +229,7 @@ async def on_message(message: discord.Message) -> None:
                 timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=HARASSMENT_TIMEOUT_DURATION)
                 await message.author.timeout(timeout_until, reason="Harassment detected")
             except discord.errors.Forbidden:
-                            logger.warning("Lacking permissions to timeout user %s for rate limiting", username)
+                logger.warning("Lacking permissions to timeout user %s for harassment", username)
 
         case "insult":
             action_taken = "warn"
@@ -249,16 +248,12 @@ async def on_message(message: discord.Message) -> None:
         except discord.errors.NotFound:
             pass
 
-    log_violation(
-        user_id=user_id,
-        username=username,
-        guild_id=guild_id,
-        channel_id=channel_id,
-        message_content=content,
-        category=str(category),
-        confidence_score=confidence_score,
-        action_taken=action_taken
+    await asyncio.to_thread(
+        log_violation,
+        user_id, username, guild_id, channel_id,
+        content, str(category), confidence_score, action_taken
     )
+
     await log_to_discord_channel(action_taken, message.author, str(category), confidence_score, content)
     
     if action_taken == "warn":
@@ -268,11 +263,15 @@ async def on_message(message: discord.Message) -> None:
         if warn_count >= 3:
             user_warn_counts[user_id] = 0
             try:
+                await message.delete()
+            except (discord.errors.Forbidden, discord.errors.NotFound):
+                pass
+            try:
                 timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=HARASSMENT_TIMEOUT_DURATION)
                 await message.author.timeout(timeout_until, reason="Reached 3 warnings")
             except discord.errors.Forbidden:
-                            logger.warning("Lacking permissions to timeout user %s for rate limiting", username)
-            log_violation(user_id, username, guild_id, channel_id, content, "warn_threshold", 1.0, "timeout")
+                logger.warning("Lacking permissions to timeout user %s", username)
+            await asyncio.to_thread(log_violation, user_id, username, guild_id, channel_id, content, "warn_threshold", 1.0, "timeout")
             await log_to_discord_channel("timeout", message.author, "warn_threshold", 1.0, content)
             return
 
@@ -299,12 +298,12 @@ async def history(
     user: discord.Member,
     limit: int = 10
 ) -> None:
-    violations = get_violations(user.id, limit=limit)
+    violations = await asyncio.to_thread(get_violations, user.id, limit)
 
     if not violations:
         embed = discord.Embed(
             title="No Violations Found",
-            description="No violations found for {user.mention}.",
+            description=f"No violations found for {user.mention}.",
             color=discord.Color.green(),
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
@@ -336,7 +335,6 @@ async def history(
 
         action_emoji_map = {
             "timeout": "⏱️",
-            "mute": "🔇",
             "warn": "⚠️",
             "dropped": "🛡️",
             "rate_limited": "🚦",
@@ -346,9 +344,9 @@ async def history(
         embed.add_field(
             name=f"{emoji} #{i} — {timestamp}",
             value=(
-                f"**Category:** `{category}`\n"
-                f"**Action:** `{action}` — **Score:** `{score:.2f}`\n"
-                f"**Message:** `{msg}`"
+                f"**Category:** {category}\n"
+                f"**Action:** {action} — **Score:** {score:.2f}\n"
+                f"**Message:** {msg}"
             ),
             inline=False
         )
