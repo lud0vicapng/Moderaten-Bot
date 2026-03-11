@@ -158,8 +158,9 @@ docker compose up --build
 
 - **False positives on colloquial Italian**: the model (`qwen3:8b`) can misclassify informal expressions containing flagged keywords used in a non-offensive context. This means that classification quality heavily depends on the model used, so larger or fine-tuned models should significantly reduce false positives.
 - **In-memory warn counts**: user warn counts are stored in memory and reset on bot restart. For production use, these should be persisted to the database.
+- **Message truncation**: messages are truncated to `MAX_CONTENT_LENGTH` (300 characters) before analysis. Content beyond this limit is never evaluated, which could allow moderation bypass on very long messages.
 - **Single-server architecture**: the current setup is designed for one server. Multi-server support at scale would require sharding and a more robust database and worker infrastructure.
-- **TinyDB**: suitable for a PoC, not recommended for high-traffic production use. Using a proper database (PostgreSQL, SQLite) would be more appropriate at scale.
+- **TinyDB**: suitable for this PoC, not recommended for high-traffic production use. Using a proper database (PostgreSQL, SQLite) would be more appropriate at scale.
 
 ---
 
