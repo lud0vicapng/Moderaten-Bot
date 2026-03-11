@@ -1,6 +1,6 @@
 # Moderaten: a Discord Autonomous Moderation Bot
 
-A proof-of-concept Discord bot that combines deterministic rules with AI agents to moderate server messages. Instead of relying solely on keyword filtering, Moderaten uses a pipeline of LLM agents to analyze flagged messages before applying any sanction — ensuring that even without an active admin, the server is kept under control.
+A proof-of-concept Discord bot that combines deterministic rules with AI agents to moderate server messages. Instead of relying solely on keyword filtering, Moderaten uses a pipeline of LLM agents to analyze flagged messages before applying any sanction and ensures that even without an active admin, the server is kept under control.
 
 Built with a local LLM via [Ollama](https://ollama.com/) for full data compliance.
 
@@ -63,7 +63,7 @@ timeout          timeout            warn
 
 ### Policy Engine
 
-The Policy Engine is fully deterministic: agents analyze and classify, but never directly decide the sanction.
+The Policy Engine is fully deterministic: agents analyze and classify, but the final sanctioning logic is never delegated to them as it's applied through a match/case construct.
 
 | Category | Action |
 |---|---|
