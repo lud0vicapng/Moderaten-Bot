@@ -27,14 +27,16 @@ async def inference_worker() -> None:
             result = await coro
             if not future.done():
                 future.set_result(result)
-            logger.info("Request #%d [%s] completed successfully", request_id, label)
+            if result is None:
+                logger.warning("Request #%d [%s] returned no result", request_id, label)
+            else:
+                logger.info("Request #%d [%s] completed successfully", request_id, label)
         except Exception as e:
             if not future.done():
                 future.set_exception(e)
             logger.error("Request #%d [%s] failed: %s", request_id, label, e)
         finally:
             _inference_queue.task_done()
-
 async def enqueue(coro, label: str = "unknown") -> any:
     request_id = next(_request_counter)
     loop = asyncio.get_running_loop()
