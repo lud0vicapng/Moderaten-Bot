@@ -10,7 +10,7 @@ import asyncio
 from agents import InputGuardrailTripwireTriggered
 from config import (
     DISCORD_TOKEN, ADMIN_CHANNEL_ID, RATE_LIMIT_MESSAGES, MAX_CONTENT_LENGTH, RATE_LIMIT_WINDOW,
-    CONFIDENCE_LOW_THRESHOLD, THREAT_TIMEOUT_DURATION, HARASSMENT_TIMEOUT_DURATION, EXPLANATION_COOLDOWN, BANNED_KEYWORDS
+    CONFIDENCE_LOW_THRESHOLD, THREAT_TIMEOUT_DURATION, HARASSMENT_TIMEOUT_DURATION, RATE_LIMIT_TIMEOUT_DURATION, EXPLANATION_COOLDOWN, BANNED_KEYWORDS
 )
 from database import log_violation, purge_old_violations, get_violations
 from defined_agents import classifier_agent, verifier_agent, moderator_agent, inference_worker, enqueue
