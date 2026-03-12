@@ -245,7 +245,7 @@ async def on_message(message: discord.Message) -> None:
     if check_rate_limit(user_id):
         logger.info("User %s rate limited. Applying automatic timeout.", username)
         await apply_timeout(
-            message.author, 1, "Rate limit exceeded",
+            message.author, RATE_LIMIT_TIMEOUT_DURATION, "Rate limit exceeded",
             user_id, username, guild_id, channel_id, content, "rate_limit", 0.0
         )
         return

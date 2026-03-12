@@ -13,8 +13,11 @@ RATE_LIMIT_MESSAGES: int = int(os.getenv("RATE_LIMIT_MESSAGES", "5"))
 RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "10"))
 
 CONFIDENCE_LOW_THRESHOLD: float = float(os.getenv("CONFIDENCE_LOW_THRESHOLD", "0.6"))
+
+RATE_LIMIT_TIMEOUT_DURATION: int = int(os.getenv("RATE_LIMIT_TIMEOUT_DURATION", "15"))
 THREAT_TIMEOUT_DURATION: int = int(os.getenv("THREAT_TIMEOUT_DURATION", "60"))
 HARASSMENT_TIMEOUT_DURATION: int = int(os.getenv("HARASSMENT_TIMEOUT_DURATION", "30"))
+
 EXPLANATION_COOLDOWN: int = int(os.getenv("EXPLANATION_COOLDOWN", "300"))
 
 DB_PATH: str = os.getenv("DB_PATH", "violations.json")

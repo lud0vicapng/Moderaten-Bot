@@ -72,7 +72,7 @@ The Policy Engine is fully deterministic: agents analyze and classify, but the f
 | `harassment` | Timeout |
 | `threat` | Timeout |
 | Prompt injection | Message dropped + logged |
-| Rate limit exceeded | Automatic 60s timeout |
+| Rate limit exceeded | Automatic 15min timeout |
 
 ---
 
