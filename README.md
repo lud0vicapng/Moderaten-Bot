@@ -8,7 +8,7 @@ Built with a local LLM via [Ollama](https://ollama.com/) for full data complianc
 
 ## Architecture
 
-![Moderaten Architecture](docs/architecture.png)
+![Moderaten Architecture](docs/Architecture.png)
 
 ### Agents Involved
 
