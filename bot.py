@@ -144,6 +144,84 @@ async def log_to_discord_channel(
     except discord.errors.Forbidden:
         logger.warning("Lacking permissions to send to admin channel")
 
+async def apply_timeout(
+    user: discord.Member,
+    duration_minutes: int,
+    reason: str,
+    user_id: int,
+    username: str,
+    guild_id: int,
+    channel_id: int,
+    content: str,
+    category: str,
+    confidence_score: float,
+) -> bool:
+    """
+    Applies a timeout to a user. Returns True if successful, False otherwise.
+    Logs the action to the database and admin channel only if the timeout was applied.
+    """
+    try:
+        timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=duration_minutes)
+        await user.timeout(timeout_until, reason=reason)
+    except discord.errors.Forbidden:
+        logger.warning("Lacking permissions to timeout user %s — action not logged", username)
+        return False
+
+    await asyncio.to_thread(log_violation, user_id, username, guild_id, channel_id, content, category, confidence_score, "timeout")
+    await log_to_discord_channel("timeout", user, category, confidence_score, content)
+    return True
+
+async def apply_warn(
+    message: discord.Message,
+    user_id: int,
+    username: str,
+    guild_id: int,
+    channel_id: int,
+    content: str,
+    category: str,
+    confidence_score: float,
+    reasoning: str,
+) -> None:
+    """
+    Applies a warn to a user. Logs the action to the database and admin channel.
+    If the user has reached 3 warnings, applies a timeout instead.
+    """
+    await asyncio.to_thread(
+        log_violation,
+        user_id, username, guild_id, channel_id,
+        content, category, confidence_score, "warn"
+    )
+    await log_to_discord_channel("warn", message.author, category, confidence_score, content)
+
+    user_warn_counts[user_id] = user_warn_counts.get(user_id, 0) + 1
+    warn_count = user_warn_counts[user_id]
+
+    if warn_count >= 3:
+        user_warn_counts[user_id] = 0
+        try:
+            await message.delete()
+        except (discord.errors.Forbidden, discord.errors.NotFound):
+            pass
+        await apply_timeout(
+            message.author, HARASSMENT_TIMEOUT_DURATION, "Reached 3 warnings",
+            user_id, username, guild_id, channel_id, content, "warn_threshold", 1.0
+        )
+        return
+
+    now = time.time()
+    last_explanation = user_explanation_cooldowns.get(user_id, 0.0)
+
+    if now - last_explanation >= EXPLANATION_COOLDOWN:
+        mod_result = await enqueue(moderator_agent(username, content, category, reasoning), label="moderator")
+        if mod_result and mod_result.public_message:
+            try:
+                await message.channel.send(
+                    f"{message.author.mention} {mod_result.public_message} ({warn_count}/3 warnings)"
+                )
+                user_explanation_cooldowns[user_id] = now
+            except discord.errors.Forbidden:
+                logger.warning("Lacking permissions to send explanation in channel")
+
 @bot.event
 async def on_ready() -> None:
     if bot.user:
@@ -209,86 +287,31 @@ async def on_message(message: discord.Message) -> None:
 
     confidence_score = max(0.0, min(1.0, float(confidence_score)))
 
-    if category == "normal":
-        return
-
-    action_taken = "none"
-
     match category:
+        case "normal":
+            return
         case "threat":
-            action_taken = "timeout"
-            try:
-                timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=THREAT_TIMEOUT_DURATION)
-                await message.author.timeout(timeout_until, reason="Threat detected")
-            except discord.errors.Forbidden:
-                logger.warning("Lacking permissions to timeout user %s for sending threats", username)
-
-        case "harassment":
-            action_taken = "timeout"
-            try:
-                timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=HARASSMENT_TIMEOUT_DURATION)
-                await message.author.timeout(timeout_until, reason="Harassment detected")
-            except discord.errors.Forbidden:
-                logger.warning("Lacking permissions to timeout user %s for harassment", username)
-
-        case "insult":
-            action_taken = "warn"
-
-        case _:
-            action_taken = "none"  
-
-    if action_taken == "none":
-        return
-
-    if action_taken != "warn":
-        try:
-            await message.delete()
-        except discord.errors.Forbidden:
-            logger.warning("Lacking permissions to delete message")
-        except discord.errors.NotFound:
-            pass
-
-    await asyncio.to_thread(
-        log_violation,
-        user_id, username, guild_id, channel_id,
-        content, str(category), confidence_score, action_taken
-    )
-
-    await log_to_discord_channel(action_taken, message.author, str(category), confidence_score, content)
-    
-    if action_taken == "warn":
-        user_warn_counts[user_id] = user_warn_counts.get(user_id, 0) + 1
-        warn_count = user_warn_counts[user_id]
-
-        if warn_count >= 3:
-            user_warn_counts[user_id] = 0
-            try:
-                await message.delete()
-            except (discord.errors.Forbidden, discord.errors.NotFound):
-                pass
-            try:
-                timeout_until = discord.utils.utcnow() + datetime.timedelta(minutes=HARASSMENT_TIMEOUT_DURATION)
-                await message.author.timeout(timeout_until, reason="Reached 3 warnings")
-            except discord.errors.Forbidden:
-                logger.warning("Lacking permissions to timeout user %s", username)
-            await asyncio.to_thread(log_violation, user_id, username, guild_id, channel_id, content, "warn_threshold", 1.0, "timeout")
-            await log_to_discord_channel("timeout", message.author, "warn_threshold", 1.0, content)
+            await apply_timeout(
+                message.author, THREAT_TIMEOUT_DURATION, "Threat detected",
+                user_id, username, guild_id, channel_id, content, "threat", confidence_score
+            )
             return
 
-        now = time.time()
-        last_explanation = user_explanation_cooldowns.get(user_id, 0.0)
+        case "harassment":
+            await apply_timeout(
+                message.author, HARASSMENT_TIMEOUT_DURATION, "Harassment detected",
+                user_id, username, guild_id, channel_id, content, "harassment", confidence_score
+            )
+            return
 
-        if now - last_explanation >= EXPLANATION_COOLDOWN:
-            mod_result = await enqueue(moderator_agent(username, content, str(category), str(reasoning)), label="moderator")
-            if mod_result and mod_result.public_message:
-                try:
-                    await message.channel.send(
-                        f"{message.author.mention} {mod_result.public_message} ({warn_count}/3 warnings)"
-                    )
-                    user_explanation_cooldowns[user_id] = now
-                except discord.errors.Forbidden:
-                    logger.warning("Lacking permissions to send explanation in channel")
-
+        case "insult":
+            await apply_warn(
+                message, user_id, username, guild_id, channel_id,
+                content, category, confidence_score, reasoning
+            )
+            return
+        case _:            
+            return
 
 @bot.tree.command(name="history", description="Show recent violations for a user")
 @app_commands.describe(user="The user to check", limit="Number of violations to show (default 10)")
