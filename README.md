@@ -8,49 +8,7 @@ Built with a local LLM via [Ollama](https://ollama.com/) for full data complianc
 
 ## Architecture
 
-```
-User message
-     │
-     ▼
-Rate Limiter ──── exceeded ────► Automatic timeout + log
-     │
-  not exceeded
-     │
-     ▼
-Keyword Filter ──── no match ───► Ignore
-     │
-  match
-     │
-     ▼
-Input Guardrail (Prompt Injection check)
-     │
-  injection ──────────────────► Drop message + log
-     │
-  clean
-     │
-     ▼
-Classifier Agent
-(category + confidence score)
-     │
-confidence < threshold ───┐
-     │                    │
-     │              Verifier Agent ◄─── second opinion
-     │    
-     │
-     ▼
-Policy Engine
-     │
-  ┌──┴──────────────┬─────────────────┐
-threat           harassment         insult
-  │                 │                 │
-timeout(60m)      timeout(30m)       warn
-                                      │
-                           ┌──────────┴──────┐ 
-                    warn count >= 3     warn count < 3
-                           │                 │
-                        timeout         Moderator Agent
-                                  (contextual public warning)
-```
+![Moderaten Architecture](docs/architecture.png)
 
 ### Agents Involved
 
