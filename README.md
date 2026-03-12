@@ -32,24 +32,24 @@ Input Guardrail (Prompt Injection check)
 Classifier Agent
 (category + confidence score)
      │
-  confidence < threshold ───┐
-     │                      │
-     │                 Verifier Agent ◄──────── second opinion
-     │                        (verified + category + reasoning)
+confidence < threshold ───┐
+     │                    │
+     │              Verifier Agent ◄─── second opinion
+     │    
      │
      ▼
-Policy Engine (deterministic)
+Policy Engine
      │
   ┌──┴──────────────┬─────────────────┐
 threat           harassment         insult
   │                 │                 │
-timeout          timeout            warn
+timeout(60m)      timeout(30m)       warn
                                       │
                            ┌──────────┴──────┐ 
                     warn count >= 3     warn count < 3
                            │                 │
-                        timeout       Moderator Agent
-                                 (contextual public warning)
+                        timeout         Moderator Agent
+                                  (contextual public warning)
 ```
 
 ### Agents Involved

@@ -244,13 +244,10 @@ async def on_message(message: discord.Message) -> None:
 
     if check_rate_limit(user_id):
         logger.info("User %s rate limited. Applying automatic timeout.", username)
-        try:
-            timeout_until = discord.utils.utcnow() + datetime.timedelta(seconds=60)
-            await message.author.timeout(timeout_until, reason="Rate limit exceeded")
-        except discord.errors.Forbidden:
-            logger.warning("Lacking permissions to timeout user %s for rate limiting", username)
-        await asyncio.to_thread(log_violation, user_id, username, guild_id, channel_id, content, "rate_limit", 0.0, "rate_limited")
-        await log_to_discord_channel("rate_limited", message.author, "rate_limit", 0.0, content)
+        await apply_timeout(
+            message.author, 1, "Rate limit exceeded",
+            user_id, username, guild_id, channel_id, content, "rate_limit", 0.0
+        )
         return
 
     if not check_keyword_filter(content):
