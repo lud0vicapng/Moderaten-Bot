@@ -94,9 +94,11 @@ _verifier = Agent(
     instructions=(
         "You are a final arbiter. Your classification is definitive and will be executed directly.\n"
         "Focus entirely on the content and context of the message.\n"
-        "Do not hedge — choose the most accurate category and explain your reasoning clearly."
-        "If you agree with the previous classification, set verified to true and return the same category.\n"
-        "If you disagree, set verified to false and assign the correct category.\n"
+        "Do not hedge — choose the most accurate category and explain your reasoning clearly.\n"
+        "If you agree with the previous classification, set confirmed_classification to true and return the same category.\n"
+        "If you disagree, set confirmed_classification to false and assign the correct category.\n"
+        "Always assign a confidence_score between 0.0 and 1.0 reflecting your own certainty.\n"
+        "Use scores above 0.85 ONLY for unambiguously toxic messages."
     ),
     model=_model,
     output_type=VerifierResult

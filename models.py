@@ -11,7 +11,8 @@ class ClassificationResult(BaseModel):
     reasoning: str
 
 class VerifierResult(BaseModel):
-    verified: bool
+    confirmed_classification: bool
+    confidence_score: float
     category: Literal["normal", "insult", "harassment", "threat"]
     reasoning: str
 

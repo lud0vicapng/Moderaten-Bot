@@ -267,21 +267,32 @@ async def on_message(message: discord.Message) -> None:
         await log_to_discord_channel("dropped", message.author, "injection", 1.0, content)
         return
 
-    category = class_result.category
     confidence_score = class_result.confidence_score
+    category = class_result.category
     reasoning = class_result.reasoning
 
     if confidence_score < CONFIDENCE_LOW_THRESHOLD:
         logger.info("Confidence score %.2f below threshold for user %s — invoking verifier", confidence_score, username)
         verify_result = await enqueue(verifier_agent(content, category, reasoning), label="verifier")
         if verify_result:
-            if verify_result.verified:
-                logger.info("Verifier confirmed classification: category=%s user=%s", category, username)
+            if verify_result.confirmed_classification:
+                logger.info(
+                    "Verifier confirmed classification: category=%s user=%s "
+                    "(classifier confidence score: %.2f → verifier confidence score: %.2f)",
+                    category, username, confidence_score, verify_result.confidence_score
+                )
             else:
-                logger.info("Verifier overrode classification: %s → %s user=%s", category, verify_result.category, username)
+                logger.info(
+                    "Verifier overrode classification: %s → %s user=%s "
+                    "(classifier confidence score: %.2f → verifier confidence score: %.2f)",
+                    category, verify_result.category, username,
+                    confidence_score, verify_result.confidence_score
+                )
                 category = verify_result.category
-            reasoning = verify_result.reasoning
 
+            confidence_score = verify_result.confidence_score
+            reasoning = verify_result.reasoning
+    
     confidence_score = max(0.0, min(1.0, float(confidence_score)))
 
     match category:
